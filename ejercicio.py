@@ -53,22 +53,35 @@ def main():
             self.datos = datos
 
         def tarjeta(self):
-            precio_promedio = self.datos['Ingreso_total'].sum() / self.datos['Unidades_vendidas'].sum()
-            margen_promedio = (self.datos['Ingreso_total'].sum() - self.datos['Costo_total'].sum()) / self.datos['Ingreso_total'].sum() * 100
-            unidades_totales = self.datos['Unidades_vendidas'].sum()
+            self.datos = self.datos.copy()
 
             df_fecha = pd.DataFrame({'year': self.datos['Año'], 'month': self.datos['Mes'], 'day': 1})
             self.datos['fecha'] = pd.to_datetime(df_fecha)
 
+            precio_promedio = self.datos['Ingreso_total'].sum() / self.datos['Unidades_vendidas'].sum()
+            margen_promedio = (self.datos['Ingreso_total'].sum() - self.datos['Costo_total'].sum()) / self.datos['Ingreso_total'].sum() * 100
+            unidades_totales = self.datos['Unidades_vendidas'].sum()
+
+            self.datos = self.datos.sort_values(by='fecha')
+
+            resumen_mensual = self.datos.groupby('fecha').agg({
+                'Unidades_vendidas': 'sum',
+                'Ingreso_total': 'sum',
+                'Costo_total': 'sum'
+            }).reset_index()
+
+            resumen_mensual['var_unidades'] = resumen_mensual['Unidades_vendidas'].pct_change() * 100
+            resumen_mensual['var_ingreso'] = resumen_mensual['Ingreso_total'].pct_change() * 100
+            resumen_mensual['var_costo'] = resumen_mensual['Costo_total'].pct_change() * 100
+
             with st.container(border=True):
-                
                 st.subheader(self.nombre)
                 col1, col2 = st.columns([1, 2])
 
                 with col1:
-                    st.metric("Precio Promedio", f"${precio_promedio:,.2f}")
-                    st.metric("Margen Promedio", f"{margen_promedio:.2f}%")
-                    st.metric("Unidades Vendidas", f"{unidades_totales:,.0f}")
+                    st.metric("Precio Promedio", f"${precio_promedio:,.2f}", f"{resumen_mensual['var_ingreso'].iloc[-1]:.2f}%")
+                    st.metric("Margen Promedio", f"{margen_promedio:.2f}%", f"{resumen_mensual['var_costo'].iloc[-1]:.2f}%")
+                    st.metric("Unidades Vendidas", f"{unidades_totales:,.0f}", f"{resumen_mensual['var_unidades'].iloc[-1]:.2f}%")
 
                 with col2:
                     set_seaborn_style('Arial', "#042940", "#005C53", "#D6D58E")
@@ -78,6 +91,7 @@ def main():
                     ventas_mensuales = self.datos.groupby('fecha')['Unidades_vendidas'].sum().reset_index()
                     X = np.arange(len(ventas_mensuales)).reshape(-1, 1)
                     y = ventas_mensuales['Unidades_vendidas'].values.reshape(-1, 1)
+
                     modelo = LinearRegression()
                     modelo.fit(X, y)
                     tendencia = modelo.predict(X)
@@ -88,7 +102,7 @@ def main():
                         label=f"{self.nombre} - Ventas", ax=ax
                     )
                     ax.plot(ventas_mensuales['fecha'], tendencia, color="red", linestyle="--", label="Tendencia")
-                    
+
                     ax.set_title(f"Evolución de Ventas Mensual - {self.nombre}", fontsize=10)
                     ax.set_xlabel("Fecha", fontsize=8)
                     ax.set_ylabel("Unidades Vendidas", fontsize=8)
@@ -96,6 +110,7 @@ def main():
                     ax.legend(fontsize=7)
                     ax.grid(True)
                     ax.set_ylim(0, max(ventas_mensuales['Unidades_vendidas'].values) * 1.1)
+
                     st.pyplot(fig)
 
     l = ['Todos', 'Sucursal Norte', 'Sucursal Centro', 'Sucursal Sur']
